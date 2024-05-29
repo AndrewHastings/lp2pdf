@@ -1,0 +1,585 @@
+#!/usr/bin/env perl
+
+# lp2pdf - create PDF from mainframe output with FORTRAN carriage control
+# Copyright 2024 Andrew B. Hastings
+
+our $VERSION = '1.0'; # VERSION
+
+use utf8;
+
+use File::Basename;
+use Getopt::Std;
+use PDF::API2 2.043;
+use POSIX qw(strftime);
+
+
+sub usage {
+	my($msg) = @_;
+
+	print STDERR "$msg\n" if defined($msg) && $msg ne "";
+	print STDERR << "EOF";
+Usage: lp2pdf [OPTIONS]... [FILES]...
+Convert old-style lineprinter output into PDF document(s)
+
+Options:
+ -c cpi     characters per inch (default 10); may compress or expand font
+ -e lines   margin lines at top & bottom for auto-eject mode (default 3)
+ -f font    font name (default "Andale Mono") and optional size (default 12);
+            add extension if font file name (e.g., "Arial.ttf12")
+            No Andale: try "Lucida Console", "Liberation Mono", or "Courier"
+ -i indent  left:right print margins (default "0" with -t, else "0.25")
+ -l lines   lines per page (default computed from paper size at 6 lines/inch)
+ -o ofile   output file name (default from input file name)
+ -m media   media type; "plain" (default), "greenbar", "lined", "ss", etc., or
+            a spec., e.g. "bar:3/palegreen,line:3/green,#:2:Helvetica6/gray80"
+ -p size    paper size; width:height or "lp" (default), "letter", "A4", etc.
+ -s         set PDF view mode to "single page, continuous"
+ -t         add simulated tractor feed holes to paper
+ -v rise    override default rise computed from font descender value; use
+            "-v 2.8bp" to keep "_" visible at bottom-of-page for "Courier12"
+
+Width, height, left, right, rise default to inches; append "in", "cm", "mm",
+"bp", "em", "en", "pica" to specify. Floating point allowed for all numbers.
+
+Processes standard ASA column 1 carriage controls ' ', '1', '0', '-', '+'.
+Also CDC extensions: '/' (no advance after), '2' (skip to last line),
+'Q' (auto-eject off), 'R' (auto-eject on; default), 'S' (6 lpi), 'T' (8 lpi).
+EOF
+	exit(defined $msg);
+}
+
+
+$opt_c = 10;		# chars/inch
+$opt_e = 3;		# auto-eject lines
+$opt_f = "Andale Mono";	# font
+$opt_p = "lp";		# paper size
+
+getopts("-ho:f:p:c:l:e:i:m:v:std") || &usage("");
+&usage() if $opt_h;
+
+&usage("Cannot use -o with multiple input files")
+    if defined $opt_o && $#ARGV > 0;
+&usage("Lines per page must be greater than zero")
+    if defined $opt_l && $opt_l <= 0;
+&usage("Characters per inch must be greater than zero")
+    if $opt_c <= 0;
+
+($page_width, $page_height) = &parse_pagesize($opt_p);
+$base_leading = $opt_l ? $page_height / $opt_l : 12;
+($font_name, $font_size) = &find_font($opt_f, $base_leading);
+
+# Add 0.5 inch side margins for tractor holes
+$margin = 0;
+if ($opt_t) {
+	$margin = 36;
+	$page_width += 2 * $margin;
+}
+
+$opt_i = $opt_t ? "0" : "0.25"
+    unless defined $opt_i;
+# TBD process left:right indent
+# N.B. right indent should truncate lines (else run off right edge)
+$indent = &parse_units($opt_i);
+
+&parse_media($opt_m) if defined $opt_m;
+
+my %opts = ();
+%opts = ("compress" => 0) if $opt_d;
+
+
+for my $file (@ARGV) {
+
+	my $fh;
+	if (! -e $file) {
+		print STDERR "$file: $!\n";
+		next;
+	}
+	if (! -f $file) {
+		print STDERR "$file: not a plain file\n";
+		next;
+	}
+	if (!open $fh, '<', $file) {
+		print STDERR "$file: $!\n";
+		next;
+	}
+
+	my $ofile = $opt_o;
+	if (!defined $opt_o) {
+		my($name, $path, $suffix) = fileparse($file, (".lp", ".txt"));
+		$ofile = "$name.pdf";
+	}
+	my $of;
+	if (!open $of, '>', $ofile) {
+		print STDERR "$ofile: $!\n";
+		close $fh;
+		next;
+	}
+
+	my $pdf = PDF::API2->new("file" => $of, %opts);
+	$pdf = $pdf->created(strftime "%Y%m%d%H%M%S", localtime((stat $fh)[9]));
+	$pdf = $pdf->modified(strftime "%Y%m%d%H%M%S", localtime);
+	$pdf = $pdf->creator("lp2pdf $VERSION");
+	$pdf = $pdf->title($file);
+	$pdf = $pdf->page_layout("one_column") if $opt_s;
+
+	$pdffont = $pdf->font($font_name);
+	# scale in %: 72=bp/in, font_size=bp, avgwidth=1000ths/ch, opt_c=ch/in
+	$hscale = 72*100*1000 / $opt_c / $font_size / $pdffont->avgwidth();
+	# raise baseline so descenders don't extend past bottom of page
+	my $size = $font_size < $base_leading ? $font_size : $base_leading;
+	$voffset = $opt_v ? $opt_v : $size * $pdffont->descender() / -1000;
+
+	if ($opt_d) {
+		printf("%dx%dbp lead=%g hscale=%g%% rise=%gbp\n", $page_width,
+			$page_height, $base_leading, $hscale, $voffset);
+	}
+
+	if (%numbers) {
+		$num_font = $pdf->font($numbers{'font'});
+		$num_rise = $numbers{'size'} * $num_font->descender() / -1000;
+	}
+
+	# Reset auto-eject and line spacing for each input file.
+	$leading = $base_leading;
+	$margin_top = $margin_bottom = $opt_e * $base_leading;
+
+	&process_file($fh, $pdf);
+
+	close $fh;
+	my $count = $pdf->page_count();
+	$pdf->save;
+	print "$count pages written to $ofile\n";
+}
+
+
+sub find_font {
+	my($font, $default_size) = @_;
+
+	my($name, $size) = ($font =~ m/^(.+?)(\d*)$/);
+
+	&usage("Invalid font syntax $font")
+	    if $name eq "";
+	$size = $default_size
+	    if $size eq "";
+	&usage("Font size $size not allowed")
+	    if $size <= 0;
+
+	return ($name, $size)
+	    if PDF::API2->is_standard_font($name);
+
+	# Search for file; with and without ".ttf" extension
+	return($name, $size)
+	    if -f $name;
+	return("$name.ttf", $size)
+	    if -f "$name.ttf";
+	for my $dir (PDF::API2->font_path()) {
+		return("$dir/$name", $size)
+		    if -f "$dir/$name";
+		return("$dir/$name.ttf", $size)
+		    if -f "$dir/$name.ttf";
+
+	}
+
+	# Not found; try searching via fontconfig.
+	my $file, $family;
+
+	if (!open(FC, '-|', 'fc-match',
+			    '-f', 'F=%{file}\nN=%{family}\n', $name)) {
+		print STDERR "fc-match failed: $!\n";
+		exit(2);
+	}
+	while (<FC>) {
+		chomp;
+		my($key, $val) = split("=");
+		$file = $val if $key eq "F";
+		$family = $val if $key eq "N";
+	}
+	if (!close(FC)) {
+		my $err = $? & 255;
+		$err = $! ? $! : ($err ? "signal $err" : "exit " . ($? >> 8));
+		print STDERR "fc-match failed: $err\n";
+		exit(2);
+	}
+
+	if (lc($family) ne lc($name) || !defined($file)) {
+		print STDERR "Font $name not found\n";
+		exit(1);
+	}
+
+	return ($file, $size);
+}
+
+
+sub parse_units {
+	my($arg, $what) = @_;
+
+	my %factor = (
+		"p"	=> 1,
+		"bp"	=> 1,
+		"en"	=> 6,
+		"em"	=> 7.2,
+		"pica"	=> 12,
+		"in"	=> 72,
+		"inch"	=> 72,
+		"cm"	=> 72/2.54,
+		"mm"	=> 72/25.4,
+	);
+
+	my($val, $unit) = ($arg =~ m/^([.\d]+)([a-z]*)$/);
+
+	$unit = "inch" if $unit eq "";
+	if (!defined $factor{lc $unit}) {
+		&usage("Unit '$unit' unknown. Valid units: " .
+			join(", ", sort keys %factor));
+	}
+
+	&usage("Invalid $what '$arg'")
+	    if $what && $val <= 0;
+
+	return $val * $factor{lc $unit};
+}
+
+
+sub parse_pagesize {
+	my($size) = @_;
+
+	my %presets = (
+		"lp"	    => "13.7in:11in",
+		"letter"    => "8.5in:11in",
+		"portrait"  => "8.5in:11in",
+		"letterr"   => "11in:8.5in",
+		"landscape" => "11in:8.5in",
+		"legal"     => "8.5in:14in",
+		"ledger"    => "17in:11in",
+		"a0"	    => "2380bp:3368bp",
+		"a1"	    => "1684bp:2380bp",
+		"a2"	    => "1190bp:1684bp",
+		"a3"	    => "842bp:1190bp",
+		"a4"	    => "595bp:842bp",   # approx. 210mm:297mm
+		"a5"	    => "421bp:595bp",
+		"a6"	    => "297bp:421bp",
+		"b0"	    => "2828bp:4000bp",
+		"b1"	    => "2000bp:2828bp",
+		"b2"	    => "1414bp:2000bp",
+		"b3"	    => "1000bp:1414bp",
+		"b4"	    => "707bp:1000bp",
+		"b5"	    => "500bp:707bp",
+		"b6"	    => "353bp:500bp",
+	);
+	$size = $presets{lc $size} if defined $presets{lc $size};
+
+	if (! ($size =~ /:/)) {
+		&usage("Unknown page size '$size'. Use width:height or: " .
+			join(", ", sort keys %presets));
+	}
+	my($width, $height) = split ":", $size;
+
+	return (&parse_units($width, "width"), &parse_units($height, "height"));
+}
+
+
+sub parse_media {
+	my($spec) = @_;
+
+	my %presets = (
+		"greenbar"  => "bar:3/palegreen,line:3/limegreen",
+		"lined"     => "line:2/gray90:6/gray80,#:2/gray80",
+		"ss"        => "plain:lightgreen",
+	);
+	$spec = $presets{lc $spec} if defined $presets{lc $spec};
+
+	foreach (split ",", $spec) {
+		my($type, @params) = split ":";
+		my $step, $color, $font;
+
+		if ($type eq "bar") {
+			# bar:step/color
+			($step, $color) = split "/", $params[0];
+			$bars{'step'} = $step ? $step : 1;
+			$bars{'color'} = $color ? $color : "palegreen";
+
+		} elsif ($type eq "line") {
+			# line:step1/color1:step2/color2
+			($step, $color) = split "/", $params[1];
+			$lines{'step2'} = $step if $step;
+			$lines{'color2'} = $color ? $color : "gray80";
+
+			($step, $color) = split "/", $params[0];
+			$step = 1
+			    unless defined($step) || defined($lines{'step2'});
+			$lines{'step1'} = $step if $step;
+			$lines{'color1'} = $color ? $color : "gray90";
+
+		} elsif ($type eq "#" || $type eq "number") {
+			# #:step:font/color or #:step/color
+			($step, $color) = split "/", $params[0];
+			$numbers{'step'} = $step ? $step : 1;
+			$numbers{'color'} = $color ? $color : "gray80";
+
+			($font, $color) = split "/", $params[1];
+			$numbers{'color'} = $color if $color;
+			$font = "Helvetica" unless $font;
+			($numbers{'font'}, $numbers{'size'}) =
+					   &find_font($font, $base_leading/2);
+
+		} elsif ($type eq "plain") {
+			# plain:color
+			$bgcolor = $params[0];
+
+		} elsif ($type =~ m#plain/(.*)#) {
+			# plain/color
+			$bgcolor = $1;
+
+		} else {
+			&usage("Invalid media syntax $_");
+		}
+
+	}
+}
+
+
+sub do_bg {
+	my($page) = @_;
+
+	return if $bgcolor eq "white" || $bgcolor eq "";
+
+	my $gfx = $page->graphics;
+	$gfx = $gfx->save;
+
+	$gfx->fill_color($bgcolor);
+	$gfx->rectangle(0, 0, $page_width, $page_height);
+	$gfx->fill;
+
+	$gfx = $gfx->restore;
+}
+
+
+sub do_bars {
+	my($page) = @_;
+
+	my $height = $base_leading * $bars{'step'};
+	my $gfx = $page->graphics;
+	$gfx = $gfx->save;
+
+	$gfx->fill_color($bars{'color'});
+	for (my $ypos = $page_height - $height; $ypos > 0;
+						     $ypos -= 2 * $height) {
+		$gfx->rectangle($margin, $ypos,
+				$page_width - $margin, $ypos - $height);
+	}
+	$gfx->fill;
+
+	$gfx = $gfx->restore;
+}
+
+
+sub do_lines {
+	my($page) = @_;
+	my $gfx, $height;
+
+	my $step1 = $lines{'step1'};
+	my $step2 = $lines{'step2'};
+
+	# Narrow ledger lines every $step1 print lines
+	if ($step1) {
+		$gfx = $page->graphics;
+		$gfx = $gfx->save;
+		$gfx->stroke_color($lines{'color1'});
+		$gfx->line_width(0.1);
+		$height = $base_leading * $step1;
+		my $i = 0;
+		for (my $ypos = $page_height - $height; $ypos > 0;
+							    $ypos -= $height) {
+			$i += $step1;
+			next if $step2 && $i % $step2 == 0;
+			$gfx->move($margin, $ypos);
+			$gfx->line($page_width - $margin, $ypos);
+		}
+		$gfx->stroke;
+		$gfx = $gfx->restore;
+	}
+
+	# Broad ledger lines every $step2 print lines
+	if ($step2) {
+		$gfx = $page->graphics;
+		$gfx = $gfx->save;
+		$gfx->stroke_color($lines{'color2'});
+		$gfx->line_width(0.4);
+		$height = $base_leading * $step2;
+		for (my $ypos = $page_height - $height; $ypos > 0;
+							    $ypos -= $height) {
+			$gfx->move($margin, $ypos);
+			$gfx->line($page_width - $margin, $ypos);
+		}
+		$gfx->stroke;
+		$gfx = $gfx->restore;
+	}
+}
+
+
+sub do_numbers {
+	my($page) = @_;
+
+	my $step = $numbers{'step'};
+	my $spacing = $step * $base_leading;
+
+	my $text = $page->text;
+	$text->fill_color($numbers{'color'});
+	$text->font($num_font, $numbers{'size'});
+	$text->leading($spacing);
+	$text->rise($num_rise) if $num_rise;
+	$text->position($page_width - $margin, $page_height - $spacing);
+
+	for (my $i = $step; &cur_ypos($text) > 0; $i += $step) {
+		my $line = "$i  ";
+		$text->text($line, indent => - $text->text_width($line));
+		$text->crlf;
+	}
+
+	$text->fill_color("black");
+}
+
+
+sub do_tractors {
+	my($page) = @_;
+
+	# Standard tractor holes are spaced 1/2in (36bp) apart vertically.
+	# Adjust spacing so number of holes per page is an integer.
+	my $num_holes = int($page_height / 36 + 0.5);
+	my $spacing = $page_height / $num_holes;
+
+	my $gfx = $page->graphics;
+	$gfx = $gfx->save;
+
+	$gfx->fill_color("black");
+	$gfx->stroke_color("gray50");
+	$gfx->line_width(0.4);
+	for (my $ypos = $page_height - $spacing/2; $ypos > 0;
+							$ypos -= $spacing) {
+		# 1/8in (9bp) holes centered in each side margin
+		$gfx->circle($margin/2, $ypos, 9);
+		$gfx->circle($page_width - $margin/2, $ypos, 9);
+	}
+	$gfx->paint;
+
+	$gfx = $gfx->restore;
+}
+
+
+sub page_first_line {
+	return $page_height - $margin_top;
+}
+
+
+sub page_last_line {
+	return $margin_bottom + $leading;
+}
+
+
+sub new_page {
+	my($pdf) = @_;
+
+	my $page = $pdf->page;
+	$page->size([0, 0, $page_width, $page_height]);
+
+	&do_bg($page) if defined $bgcolor;
+	&do_bars($page) if %bars;
+	&do_lines($page) if %lines;
+	&do_numbers($page) if %numbers;
+	&do_tractors($page) if $opt_t;
+
+	my $text = $page->text;
+	$text->font($pdffont, $font_size);
+	$text->hscale($hscale) if $hscale != 100;
+	$text->leading($leading);
+	$text->rise($voffset) if $voffset;
+	$text->position($margin + $indent, &page_first_line());
+
+	return $text;
+}
+
+
+sub cur_ypos {
+	my($text) = @_;
+
+	return ($text->position)[1];
+}
+
+
+sub process_file {
+	my($fh, $pdf) = @_;
+
+	my $text = undef;
+	my $skip_next_advance = 0;
+	my %warned = ();
+
+	# N.B. Positioning happens just before printing, therefore:
+	# - PDF pages (inc. p. 1) not created until printing text on that page
+	# - At loop end, text cursor is at end of just-printed line
+	while (<$fh>) {
+		chomp;
+		s/\r//;
+
+		my($cc, $line) = unpack "aA*";
+		my $advance = $skip_next_advance ? 0 : 1;
+		$skip_next_advance = 0;
+
+		if ($cc eq '1') {	# advance to first line on page
+			$text = &new_page($pdf);
+			$advance = 1;
+		} elsif ($cc eq '2') {	# advance to last line on page
+			if (!defined $text ||
+			    &cur_ypos($text) < &page_last_line()) {
+				$text = &new_page($pdf);
+			}
+			$text->position(0,
+					&page_last_line() - &cur_ypos($text));
+			$advance = 1;
+		} elsif ($cc eq '' ||
+			 $cc eq ' ') {	# single space
+			# nothing to do
+		} elsif ($cc eq '0') {	# double space
+			$advance++;
+		} elsif ($cc eq '-') {	# triple space
+			$advance += 2;
+		} elsif ($cc eq '+') {	# overprint previous line
+			$advance = 0;
+		} elsif ($cc eq '/') {	# overprint next line
+			$skip_next_advance = 1;
+		} elsif ($cc eq 'Q') {	# auto-eject off
+			$margin_top = $margin_bottom = 0;
+			next;	# no print
+		} elsif ($cc eq 'R') {	# auto-eject on
+			$margin_top = $margin_bottom = $opt_e * $base_leading;
+			next;	# no print
+		} elsif ($cc eq 'S') {	# 6 lpi (experimental)
+			$leading = $base_leading;
+			$text->leading($leading) if defined $text;
+			next;	# no print
+		} elsif ($cc eq 'T') {	# 8 lpi (experimental)
+			$leading = 3 * $base_leading / 4;
+			$text->leading($leading) if defined $text;
+			next;	# no print
+		} else {		# unrecognized carriage control
+			print STDERR "Unrecognized carriage control '$cc'\n"
+			    unless $warned{$cc};
+			$warned{$cc} = 1;
+			# process as ' ' (as above, nothing to do)
+		}
+
+		$text = &new_page($pdf)
+		    if ! defined $text;
+		$advance = 1		# can't print above top margin
+		    if &cur_ypos($text) >= &page_first_line();
+		$text->position(0, 0)
+		    if ! $advance;
+
+		while ($advance > 0) {
+			$text = &new_page($pdf)
+			    if &cur_ypos($text) < &page_last_line();
+			$text->crlf;
+			$advance--;
+		}
+		$text->text($line);
+	}
+}
