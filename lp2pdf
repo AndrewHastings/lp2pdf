@@ -583,3 +583,60 @@ sub process_file {
 		$text->text($line);
 	}
 }
+
+
+=head1 NAME
+
+lp2pdf - create PDF from mainframe output with FORTRAN carriage control
+
+=head1 SYNOPSIS
+
+lp2pdf [OPTIONS]... [FILES]...
+
+=head1 OPTIONS
+
+ -c cpi     characters per inch (default 10); may compress or expand font
+ -e lines   margin lines at top & bottom for auto-eject mode (default 3)
+ -f font    font name (default "Andale Mono") and optional size (default 12);
+            add extension if font file name (e.g., "Arial.ttf12")
+            No Andale: try "Lucida Console", "Liberation Mono", or "Courier"
+ -i indent  left:right print margins (default "0" with -t, else "0.25")
+ -l lines   lines per page (default computed from paper size at 6 lines/inch)
+ -o ofile   output file name (default from input file name)
+ -m media   media type; "plain" (default), "greenbar", "lined", "ss", etc., or
+            a spec., e.g. "bar:3/palegreen,line:3/green,#:2:Helvetica6/gray80"
+ -p size    paper size; width:height or "lp" (default), "letter", "A4", etc.
+ -s         set PDF view mode to "single page, continuous"
+ -t         add simulated tractor feed holes to paper
+ -v rise    override default rise computed from font descender value; use
+            "-v 2.8bp" to keep "_" visible at bottom-of-page for "Courier12"
+
+=head1 DESCRIPTION
+
+Width, height, left, right, rise default to inches; append "in", "cm", "mm",
+"bp", "em", "en", "pica" to specify. Floating point allowed for all numbers.
+
+Processes standard ASA column 1 carriage controls ' ', '1', '0', '-', '+'.
+Also CDC extensions: '/' (no advance after), '2' (skip to last line),
+'Q' (auto-eject off), 'R' (auto-eject on; default), 'S' (6 lpi), 'T' (8 lpi).
+
+=head1 AUTHOR
+
+Andrew Hastings <abh@ieee.org>
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+version 2, as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+=cut
