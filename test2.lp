@@ -263,7 +263,7 @@ Q
  line 65 next line is "double-space at line 66"
 0double-space at line 66
  line 2 first line after "double-space at line 66"
- line 3    "double-space at line 66" text line should have appeared
+ line 3    line 1 should be "double-space at line 66"
  line 4 last line before eject
 1line 1 eject
  line 2
@@ -332,8 +332,9 @@ Q
  line 65 next line is "triple-space at line 66"
 -triple-space at line 66
  line 3 first line after "triple-space at line 66"
- line 4    "triple-space at line 66" text line should have appeared
- line 5 last line before eject
+ line 4    line 1 should be blank
+ line 5    line 2 should be "triple-space at line 66"
+ line 6 last line before eject
 1line 1 eject
  line 2
  line 3
@@ -400,7 +401,7 @@ Q
  line 64 next line is "triple-space at line 65"
 -triple-space at line 65
  line 2 first line after "triple-space at line 65"
- line 3    "triple-space at line 65" text line should have appeared
+ line 3    line 1 should be "triple-space at line 65"
  line 4 last line before eject
 1line 1 eject
  line 2
@@ -456,7 +457,9 @@ Q
  line 52
  line 53
  line 54 last line before "skip to end-of-page"
-2line 66 skip to end-of-page
+2line 64 skip to end-of-page
+ line 65
+ line 66
  line 1 new page via overflowing previous page after "skip to end-of-page"
  line 2
  line 3
@@ -519,16 +522,14 @@ Q
  line 60
  line 61
  line 62
- line 63
- line 64
- line 65 next line should be on this page
-2line 66 skip to end-of-page, followed by another skip to end-of-page
-2line 66 consecutive skip to end-of-page, followed by null line
+ line 63 next line should be on this page
+2line 64 skip to end-of-page, followed by another skip to end-of-page
+2line 64 consecutive skip to end-of-page, followed by null line
 
-1line 1 eject after null line (should be blank page in-between)
-2line 66 skip to end-of-page before line with one blank
+1line 1 eject after null line
+2line 64 skip to end-of-page before line with one blank
  
-1line 1 eject after line with one blank (should be blank page in-between)
+1line 1 eject after line with one blank
  line 2
  line 3
  line 4
@@ -592,4 +593,4 @@ Q
  line 62 last line before eject
 1line 1 eject
  line 2
- line 3            END TEST 2 (19 pages)
+ line 3            END TEST 2 (17 pages)
