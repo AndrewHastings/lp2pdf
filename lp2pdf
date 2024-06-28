@@ -3,7 +3,7 @@
 # lp2pdf - create PDF from mainframe output with FORTRAN carriage control
 # Copyright 2024 Andrew B. Hastings
 
-our $VERSION = '1.0.1'; # VERSION
+our $VERSION = '1.1'; # VERSION
 
 use utf8;
 
@@ -23,11 +23,11 @@ Convert old-style lineprinter output into PDF document(s)
 
 Options:
  -c cpi     characters per inch (default 10); may compress or expand font
- -e lines   margin lines at top & bottom for auto-eject mode (default 3)
+ -e eject   bottom:shift auto-eject mode bottom lines, top shift (default 2:0)
  -f font    font name (default "Andale Mono") and optional size (default 12);
             add extension if font file name (e.g., "Arial.ttf12")
             No Andale: try "Lucida Console", "Liberation Mono", or "Courier"
- -i indent  left:right print margins (default "0" with -t, else "0.25")
+ -i indent  left:right print margins; default "0" (wide paper), "0.2" (narrow)
  -l lines   lines per page (default computed from paper size at 6 lines/inch)
  -o ofile   output file name (default from input file name)
  -m media   media type; "plain" (default), "greenbar", "lined", "ss", etc., or
@@ -43,14 +43,14 @@ Width, height, left, right, rise default to inches; append "in", "cm", "mm",
 
 Processes standard ASA column 1 carriage controls ' ', '1', '0', '-', '+'.
 Also CDC extensions: '/' (no advance after), '2' (skip to last line),
-'Q' (auto-eject off), 'R' (auto-eject on; default), 'S' (6 lpi), 'T' (8 lpi).
+'Q' (auto-eject off; default), 'R' (auto-eject on), 'S' (6 lpi), 'T' (8 lpi).
 EOF
 	exit(defined $msg);
 }
 
 
 $opt_c = 10;		# chars/inch
-$opt_e = 3;		# auto-eject lines
+$opt_e = "2:0";		# auto-eject lines
 $opt_f = "Andale Mono";	# font
 $opt_p = "lp";		# paper size
 
@@ -68,6 +68,21 @@ getopts("-ho:f:p:c:l:e:i:m:v:std") || &usage("");
 $base_leading = $opt_l ? $page_height / $opt_l : 12;
 ($font_name, $font_size) = &find_font($opt_f, $base_leading);
 
+# top_lines = lines to shift down all content when auto-eject enabled
+# bottom_lines = bottom margin lines when auto-eject enabled
+($bottom_lines, $top_lines) = split ":", $opt_e;
+$bottom_lines = 0 unless defined $bottom_lines;
+&usage("Auto-eject bottom lines must be non-negative")
+    if $bottom_lines < 0;
+&usage("Auto-eject top shift lines must be non-negative")
+    if $top_lines < 0;
+&usage("Auto-eject top shift lines cannot be greater than bottom lines")
+    if $top_lines > $bottom_lines;
+
+# Carriage control '2' skips to this y-pos.
+# (Will be shifted down by $top_lines when auto-eject enabled)
+$last_line = $bottom_lines * $base_leading;
+
 # Add 0.5 inch side margins for tractor holes
 $margin = 0;
 if ($opt_t) {
@@ -75,7 +90,7 @@ if ($opt_t) {
 	$page_width += 2 * $margin;
 }
 
-$opt_i = $opt_t ? "0" : "0.25"
+$opt_i = $page_width > 675 ? "0" : "0.2"
     unless defined $opt_i;
 # TBD process left:right indent
 # N.B. right indent should truncate lines (else run off right edge)
@@ -134,11 +149,11 @@ for my $file (@ARGV) {
 	$hscale = 72*100*1000 / $opt_c / $font_size / $pdffont->avgwidth();
 	# raise baseline so descenders don't extend past bottom of page
 	my $size = $font_size < $base_leading ? $font_size : $base_leading;
-	$voffset = $opt_v ? $opt_v : $size * $pdffont->descender() / -1000;
+	$base_voffset = $opt_v ? $opt_v : $size * $pdffont->descender() / -1000;
 
 	if ($opt_d) {
 		printf("%dx%dbp lead=%g hscale=%g%% rise=%gbp\n", $page_width,
-			$page_height, $base_leading, $hscale, $voffset);
+			$page_height, $base_leading, $hscale, $base_voffset);
 	}
 
 	if (%numbers) {
@@ -146,9 +161,10 @@ for my $file (@ARGV) {
 		$num_rise = $numbers{'size'} * $num_font->descender() / -1000;
 	}
 
-	# Reset auto-eject and line spacing for each input file.
+	# Reset line spacing and auto-eject for each input file.
 	$leading = $base_leading;
-	$margin_top = $margin_bottom = $opt_e * $base_leading;
+	$voffset = $base_voffset;
+	&auto_eject(0);
 
 	&process_file($fh, $pdf);
 
@@ -473,13 +489,20 @@ sub do_tractors {
 }
 
 
-sub page_first_line {
-	return $page_height - $margin_top;
-}
+# top_shift = current points to shift down all content
+# bottom_margin = current bottom margin in points
+sub auto_eject {
+	my($onoff) = @_;
 
-
-sub page_last_line {
-	return $margin_bottom + $leading;
+	if ($onoff) {
+		$top_shift = $top_lines * $base_leading;
+		$bottom_margin = $last_line - $top_shift;
+	} else {
+		$top_shift = 0;
+		$bottom_margin = 0;
+	}
+	printf("     shift=%dbp bottom=%dbp\n", $top_shift, $bottom_margin)
+	    if $opt_d;
 }
 
 
@@ -488,6 +511,8 @@ sub new_page {
 
 	my $page = $pdf->page;
 	$page->size([0, 0, $page_width, $page_height]);
+
+	printf("Page %d\n", $pdf->page_count()) if $opt_d;
 
 	&do_bg($page) if defined $bgcolor;
 	&do_bars($page) if %bars;
@@ -500,7 +525,7 @@ sub new_page {
 	$text->hscale($hscale) if $hscale != 100;
 	$text->leading($leading);
 	$text->rise($voffset) if $voffset;
-	$text->position($margin + $indent, &page_first_line());
+	$text->position($margin + $indent, $page_height - $top_shift);
 
 	return $text;
 }
@@ -534,13 +559,12 @@ sub process_file {
 		if ($cc eq '1') {	# advance to first line on page
 			$text = &new_page($pdf);
 			$advance = 1;
-		} elsif ($cc eq '2') {	# advance to last line on page
-			if (!defined $text ||
-			    &cur_ypos($text) < &page_last_line()) {
+		} elsif ($cc eq '2') {	# advance to last auto-eject line
+			my $new_y = $last_line - $top_shift + $leading;
+			if (!defined $text || &cur_ypos($text) < $new_y) {
 				$text = &new_page($pdf);
 			}
-			$text->position(0,
-					&page_last_line() - &cur_ypos($text));
+			$text->position(0, $new_y - &cur_ypos($text));
 			$advance = 1;
 		} elsif ($cc eq '' ||
 			 $cc eq ' ') {	# single space
@@ -554,18 +578,26 @@ sub process_file {
 		} elsif ($cc eq '/') {	# overprint next line
 			$skip_next_advance = 1;
 		} elsif ($cc eq 'Q') {	# auto-eject off
-			$margin_top = $margin_bottom = 0;
+			&auto_eject(0);
 			next;	# no print
 		} elsif ($cc eq 'R') {	# auto-eject on
-			$margin_top = $margin_bottom = $opt_e * $base_leading;
+			&auto_eject(1);
 			next;	# no print
 		} elsif ($cc eq 'S') {	# 6 lpi (experimental)
 			$leading = $base_leading;
-			$text->leading($leading) if defined $text;
+			$voffset = $base_voffset;
+			if (defined $text) {
+				$text->leading($leading);
+				$text->rise($voffset) if $voffset;
+			}
 			next;	# no print
 		} elsif ($cc eq 'T') {	# 8 lpi (experimental)
 			$leading = 3 * $base_leading / 4;
-			$text->leading($leading) if defined $text;
+			$voffset = 3 * $base_voffset / 4;
+			if (defined $text) {
+				$text->leading($leading);
+				$text->rise($voffset) if $voffset;
+			}
 			next;	# no print
 		} else {		# unrecognized carriage control
 			my $pr = ord($cc);
@@ -580,16 +612,23 @@ sub process_file {
 		$text = &new_page($pdf)
 		    if ! defined $text;
 		$advance = 1		# can't print above top margin
-		    if &cur_ypos($text) >= &page_first_line();
-		$text->position(0, 0)
+		    if &cur_ypos($text) >= $page_height - $top_shift;
+		$text->position(0, 0)	# cr but no lf
 		    if ! $advance;
 
+		printf("%4d advance=%d\n", &cur_ypos($text), $advance)
+		    if $opt_d;
 		while ($advance > 0) {
-			$text = &new_page($pdf)
-			    if &cur_ypos($text) < &page_last_line();
+		        if (&cur_ypos($text) < $bottom_margin + $leading) {
+				$text = &new_page($pdf);
+				# Per CDC 60231300D p.8, if auto-eject is
+				# enabled stop advancing after new page
+				$advance = 1 if $bottom_margin;
+			}
 			$text->crlf;
 			$advance--;
 		}
+		printf("%4d %s\n", &cur_ypos($text), $line) if $opt_d;
 		$text->text($line);
 	}
 }
@@ -606,11 +645,11 @@ lp2pdf [OPTIONS]... [FILES]...
 =head1 OPTIONS
 
  -c cpi     characters per inch (default 10); may compress or expand font
- -e lines   margin lines at top & bottom for auto-eject mode (default 3)
+ -e eject   bottom:shift auto-eject mode bottom lines, top shift (default 2:0)
  -f font    font name (default "Andale Mono") and optional size (default 12);
             add extension if font file name (e.g., "Arial.ttf12")
             No Andale: try "Lucida Console", "Liberation Mono", or "Courier"
- -i indent  left:right print margins (default "0" with -t, else "0.25")
+ -i indent  left:right print margins; default "0" (wide paper), "0.2" (narrow)
  -l lines   lines per page (default computed from paper size at 6 lines/inch)
  -o ofile   output file name (default from input file name)
  -m media   media type; "plain" (default), "greenbar", "lined", "ss", etc., or
@@ -628,7 +667,7 @@ Width, height, left, right, rise default to inches; append "in", "cm", "mm",
 
 Processes standard ASA column 1 carriage controls ' ', '1', '0', '-', '+'.
 Also CDC extensions: '/' (no advance after), '2' (skip to last line),
-'Q' (auto-eject off), 'R' (auto-eject on; default), 'S' (6 lpi), 'T' (8 lpi).
+'Q' (auto-eject off; default), 'R' (auto-eject on), 'S' (6 lpi), 'T' (8 lpi).
 
 =head1 AUTHOR
 

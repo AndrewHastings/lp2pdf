@@ -1,12 +1,12 @@
 T
- line 1 after 8 lpi with auto-eject on
+ line 1 after 8 lpi with auto-eject off
  line 2
  line 3            TEST 5
  line 4            - 'S' 6 lpi
  line 5            - 'T' 8 lpi
  line 6
  line 7            Command line:
- line 8              lp2pdf -m greenbar
+ line 8              lp2pdf -m greenbar -s
  line 9
  line 10
  line 11
@@ -19,167 +19,7 @@ T
  line 18
  line 19
  line 20
- line 21
- line 22
- line 23
- line 24
- line 25
- line 26
- line 27
- line 28
- line 29
- line 30
- line 31
- line 32
- line 33
- line 34
- line 35
- line 36
- line 37
- line 38
- line 39
- line 40
- line 41
- line 42
- line 43
- line 44
- line 45
- line 46
- line 47
- line 48
- line 49
- line 50
- line 51
- line 52
- line 53
- line 54
- line 55
- line 56
- line 57
- line 58
- line 59
- line 60
- line 61
- line 62
- line 63
- line 64
- line 65
- line 66
- line 67
- line 68
- line 69
- line 70
- line 71
- line 72
- line 73
- line 74
- line 75
- line 76
- line 77
- line 78
- line 79
- line 80
- line 1 after page overflow
- line 2
- line 3
- line 4
- line 5
- line 6
- line 7
- line 8
- line 9
- line 10
- line 11
- line 12
- line 13
- line 14
- line 15
- line 16
- line 17
- line 18
- line 19
- line 20
- line 21
- line 22
- line 23
- line 24
- line 25
- line 26
- line 27
- line 28
- line 29
- line 30
- line 31
- line 32
- line 33
- line 34
- line 35
- line 36
- line 37
- line 38
- line 39
- line 40
- line 41
- line 42
- line 43
- line 44
- line 45
- line 46
- line 47
- line 48
- line 49
- line 50
- line 51
- line 52
- line 53
- line 54
- line 55
- line 56
- line 57
- line 58
- line 59
- line 60
- line 61
- line 62
- line 63
- line 64
- line 65
- line 66
- line 67
- line 68
- line 69
- line 70
- line 71
- line 72
- line 73
- line 74
- line 75
- line 76
- line 77
- line 78
- line 79
- line 80
-Q
-1line 1 eject after auto-eject OFF
- line 2
- line 3
- line 4
- line 5
- line 6
- line 7
- line 8
- line 9
- line 10
- line 11
- line 12
- line 13
- line 14
- line 15
- line 16
- line 17
- line 18
- line 19
- line 20
++         <-- OVERPRINT line 20
  line 21
  line 22
  line 23
@@ -333,12 +173,19 @@ Q
  line 83
  line 84
  line 85
- line 86
- line 87
- line 88
+ line 86 View next four lines in "single page, continuous" mode:
+ line 87 !"#$%&'()*+,-./0123456789:;<=>?`{|}~[\]^_abcdefghijklmnopqrstuvwxyz@ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ line 88 !"#$%&'()*+,-./0123456789:;<=>?`{|}~[\]^_abcdefghijklmnopqrstuvwxyz@ABCDEFGHIJKLMNOPQRSTUVWXYZ
+1line 1  !"#$%&'()*+,-./0123456789:;<=>?`{|}~[\]^_abcdefghijklmnopqrstuvwxyz@ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ line 2  !"#$%&'()*+,-./0123456789:;<=>?`{|}~[\]^_abcdefghijklmnopqrstuvwxyz@ABCDEFGHIJKLMNOPQRSTUVWXYZ
+ line 3  All lines should have identical text with identical line spacing
+ line 4  Look for truncated tops or bottoms of characters at page boundary
+ line 5
+ line 6
+ line 7
+ line 8 last line before eject
 R
-S
- line 1 page overflow after auto-eject ON, 6 lpi
+1line 1 eject after auto-eject ON
  line 2
  line 3
  line 4
@@ -398,6 +245,181 @@ S
  line 58
  line 59
  line 60
+ line 61
+ line 62
+ line 63
+ line 64
+ line 65
+ line 66
+ line 67
+ line 68
+ line 69
+ line 70
+ line 71
+ line 72
+ line 73
+ line 74
+ line 75
+ line 76
+ line 77
+ line 78
+ line 79
+ line 80
+ line 81
+ line 82
+ line 83
+ line 84
+ line 85
+ line 1 after page overflow
+ line 2
+ line 3
+ line 4
+ line 5
+ line 6
+ line 7
+ line 8
+ line 9
+ line 10
+ line 11
+ line 12
+ line 13
+ line 14
+ line 15
+ line 16
+ line 17
+ line 18
+ line 19
+ line 20
+ line 21
+ line 22
+ line 23
+ line 24
+ line 25
+ line 26
+ line 27
+ line 28
+ line 29
+ line 30
+ line 31
+ line 32
+ line 33
+ line 34
+ line 35
+ line 36
+ line 37
+ line 38
+ line 39
+ line 40
+ line 41
+ line 42
+ line 43
+ line 44
+ line 45
+ line 46
+ line 47
+ line 48
+ line 49
+ line 50
+ line 51
+ line 52
+ line 53
+ line 54
+ line 55
+ line 56
+ line 57
+ line 58
+ line 59
+ line 60
+ line 61
+ line 62
+ line 63
+ line 64
+ line 65
+ line 66
+ line 67
+ line 68
+ line 69
+ line 70
+ line 71
+ line 72
+ line 73
+ line 74
+ line 75
+ line 76
+ line 77
+ line 78
+ line 79
+ line 80
+ line 81
+ line 82
+ line 83
+ line 84
+ line 85
+S
+ line 1 page overflow after 6 lpi with auto-eject ON
+ line 2
+ line 3
+ line 4
+ line 5
+ line 6
+ line 7
+ line 8
+ line 9
+ line 10
+ line 11
+ line 12
+ line 13
+ line 14
+ line 15
+ line 16
+ line 17
+ line 18
+ line 19
+ line 20
+ line 21
+ line 22
+ line 23
+ line 24
+ line 25
+ line 26
+ line 27
+ line 28
+ line 29
+ line 30
+ line 31
+ line 32
+ line 33
+ line 34
+ line 35
+ line 36
+ line 37
+ line 38
+ line 39
+ line 40
+ line 41
+ line 42
+ line 43
+ line 44
+ line 45
+ line 46
+ line 47
+ line 48
+ line 49
+ line 50
+ line 51
+ line 52
+ line 53
+ line 54
+ line 55
+ line 56
+ line 57
+ line 58
+ line 59
+ line 60
+ line 61
+ line 62
+ line 63
+ line 64
 1line 1 eject
  line 2
  line 3
@@ -433,4 +455,4 @@ S
 1line 1 eject
  line 2
  line 3
- line 4            END TEST 5 (7 pages)
+ line 4            END TEST 5 (8 pages)

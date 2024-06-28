@@ -280,8 +280,10 @@ Q
  line 4
  line 5
  line 6 last line before skip to end-of-page
-2line 66 skip to end-of-page
+2line 64 skip to end-of-page
 +XXXXXXX                     --> OVERPRINT "skip to end-of-page"
+ line 65
+ line 66
  line 1 new page via overflowing after "overprint skip to end-of-page"
  line 2
  line 3
@@ -420,7 +422,11 @@ R
  line 58
  line 59
  line 60
-+XXXXXXX --> OVERPRINT at line 60
+ line 61
+ line 62
+ line 63
+ line 64
++XXXXXXX --> OVERPRINT at line 64
 1line 1 eject
  line 2
  line 3
@@ -479,9 +485,13 @@ R
  line 56
  line 57
  line 58
- line 59 next line is NO ADVANCE at line 60
-/                     <-- NO ADVANCE followed by single space at line 60
- line 60 single space
+ line 59
+ line 60
+ line 61
+ line 62
+ line 63 next line is NO ADVANCE at line 64
+/                     <-- NO ADVANCE followed by single space at line 64
+ line 64 single space
 Q
 1line 1 eject after auto-eject OFF
  line 2

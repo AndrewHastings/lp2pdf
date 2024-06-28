@@ -11,7 +11,7 @@ R
  line 10
  line 11           Command line:
  line 12             lp2pdf -m lined
- line 13
+ line 13             lp2pdf -m lined -e 2:1
  line 14
  line 15
  line 16
@@ -56,6 +56,10 @@ R
  line 58
  line 59
  line 60
+ line 61
+ line 62
+ line 63
+ line 64
 1line 1 eject
  line 2
  line 3
@@ -115,7 +119,11 @@ R
  line 57
  line 58
  line 59
- line 60 next line is null line (should be on new page)
+ line 60
+ line 61
+ line 62
+ line 63
+ line 64 next line is null line (should be on new page)
 
 1line 1 eject after null line (should be blank page in-between)
  line 2
@@ -176,7 +184,11 @@ R
  line 57
  line 58
  line 59
- line 60 next line is single blank (should be on new page)
+ line 60
+ line 61
+ line 62
+ line 63
+ line 64 next line is single blank (should be on new page)
  
 1line 1 eject after line with single blank (should be blank page in-between)
  line 2
@@ -236,10 +248,14 @@ R
  line 56
  line 57
  line 58
- line 59 next line is "double-space at line 60"
-0double-space at line 60
- line 2 first line after "double-space at line 60"
- line 3    "double-space at line 60" text line should have appeared
+ line 59
+ line 60
+ line 61
+ line 62
+ line 63 next line is "double-space at line 64"
+0double-space at line 64
+ line 2 first line after "double-space at line 64"
+ line 3    line 1 should be "double-space at line 64"
  line 4 last line before eject
 1line 1 eject
  line 2
@@ -299,11 +315,15 @@ R
  line 56
  line 57
  line 58
- line 59 next line is "triple-space at line 60"
--triple-space at line 60
- line 3 first line after "triple-space at line 60"
- line 4    "triple-space at line 60" text line should have appeared
- line 5 last line before eject
+ line 59
+ line 60
+ line 61
+ line 62
+ line 63 next line is "triple-space at line 64"
+-triple-space at line 64
+ line 2 first line after "triple-space at line 64"
+ line 3    line 1 should be "triple-space at line 64"
+ line 4 last line before eject
 1line 1 eject
  line 2
  line 3
@@ -361,10 +381,14 @@ R
  line 55
  line 56
  line 57
- line 58 next line is "triple-space at line 59"
--triple-space at line 59
- line 2 first line after "triple-space at line 59"
- line 3    "triple-space at line 59" text line should have appeared
+ line 58
+ line 59
+ line 60
+ line 61
+ line 62 next line is "triple-space at line 63"
+-triple-space at line 63
+ line 2 first line after "triple-space at line 63"
+ line 3    line 1 should be "triple-space at line 63"
  line 4 last line before eject
 1line 1 eject
  line 2
@@ -420,7 +444,7 @@ R
  line 52
  line 53
  line 54 last line before "skip to end-of-page"
-2line 60 skip to end-of-page
+2line 64 skip to end-of-page
  line 1 new page via overflowing previous page after "skip to end-of-page"
  line 2
  line 3
@@ -479,12 +503,16 @@ R
  line 56
  line 57
  line 58
- line 59 next line should be on this page
-2line 60 skip to end-of-page, followed by another skip to end-of-page
-2line 60 consecutive skip to end-of-page, followed by null line
+ line 59
+ line 60
+ line 61
+ line 62
+ line 63 next line should be on this page
+2line 64 skip to end-of-page, followed by another skip to end-of-page
+2line 64 consecutive skip to end-of-page, followed by null line
 
 1line 1 eject after null line (should be blank page in-between)
-2line 60 skip to end-of-page before line with one blank
+2line 64 skip to end-of-page before line with one blank
  
 1line 1 eject after line with one blank (should be blank page in-between)
  line 2
