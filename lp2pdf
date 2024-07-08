@@ -3,7 +3,7 @@
 # lp2pdf - create PDF from mainframe output with FORTRAN carriage control
 # Copyright 2024 Andrew B. Hastings
 
-our $VERSION = '1.1'; # VERSION
+our $VERSION = '1.2'; # VERSION
 
 use utf8;
 
@@ -43,7 +43,8 @@ Width, height, left, right, rise default to inches; append "in", "cm", "mm",
 
 Processes standard ASA column 1 carriage controls ' ', '1', '0', '-', '+'.
 Also CDC extensions: '/' (no advance after), '2' (skip to last line),
-'Q' (auto-eject off; default), 'R' (auto-eject on), 'S' (6 lpi), 'T' (8 lpi).
+'Q' (auto-eject off; default), 'R' (auto-eject on), 'S' (6 lpi), 'T' (8 lpi),
+and forms control '3' - '8', 'C' - 'H' (see CDC NOS Ref. Man. vol. 1).
 EOF
 	exit(defined $msg);
 }
@@ -534,6 +535,20 @@ sub new_page {
 }
 
 
+# compute starting ypos of next group of $factor lines
+sub get_skip_ypos {
+	my($cur_y, $factor) = @_;
+
+	print STDERR "Internal error: get_skip_ypos($cur_y, $factor)\n"
+	    if $factor <= 0;
+
+	my $lineno = int(($page_height - $cur_y - $top_shift + $leading - 1)
+								   / $leading);
+	my $want_line = int(($lineno + $factor) / $factor) * $factor;
+	return $page_height - $top_shift - $leading * $want_line;
+}
+
+
 sub cur_ypos {
 	my($text) = @_;
 
@@ -544,6 +559,23 @@ sub cur_ypos {
 sub process_file {
 	my($fh, $pdf) = @_;
 
+	my %pre_skip = (	# also suppresses advance after print
+		'3' => -1,	# top of odd-numbered page
+		'4' => 5,
+		'5' => 4,
+		'6' => 3,
+		'7' => 2,
+		'8' => -1,	# top of page
+	);
+	my %post_skip = (
+		'C' => -1,	# top of odd-numbered page
+		'D' => 5,
+		'E' => 4,
+		'F' => 3,
+		'G' => 2,
+		'H' => -1,	# top of page
+	);
+
 	my $text = undef;
 	my $skip_next_advance = 0;
 	my %warned = ();
@@ -551,15 +583,22 @@ sub process_file {
 	# N.B. Positioning happens just before printing, therefore:
 	# - PDF pages (inc. p. 1) not created until printing text on that page
 	# - At loop end, text cursor is at end of just-printed line
+	# Exception: the post-print advance controls 'C' - 'H' advance
+	# immediately after printing
 	while (<$fh>) {
 		chomp;
 		s/\r//;
 
 		my($cc, $line) = unpack "aA*";
 		my $advance = $skip_next_advance ? 0 : 1;
-		$skip_next_advance = 0;
+		$skip_next_advance = defined($pre_skip{$cc}) ? 1 : 0;
 
-		if ($cc eq '1') {	# advance to first line on page
+		if ($cc eq 'Q') {	# auto-eject off
+			&auto_eject(0);
+			$cc = 'S';	# also disables 8 lpi
+		}
+		if ($cc eq '1' ||
+		    $cc eq '8') {	# advance to first line on page
 			$text = &new_page($pdf);
 			$advance = 1;
 		} elsif ($cc eq '2') {	# advance to last auto-eject line
@@ -580,9 +619,7 @@ sub process_file {
 			$advance = 0;
 		} elsif ($cc eq '/') {	# overprint next line
 			$skip_next_advance = 1;
-		} elsif ($cc eq 'Q') {	# auto-eject off
-			&auto_eject(0);
-			next;	# no print
+		# Handled above: 'Q'      auto-eject off
 		} elsif ($cc eq 'R') {	# auto-eject on
 			&auto_eject(1);
 			next;	# no print
@@ -602,6 +639,31 @@ sub process_file {
 				$text->rise($voffset) if $voffset;
 			}
 			next;	# no print
+		} elsif ($cc eq 'V') {	# load PFC
+			print STDERR "Carriage control 'V': PFC not supported\n"
+			    unless $warned{$cc};
+			$warned{$cc} = 1;
+			$text = &new_page($pdf);
+			next;	# no print
+		} elsif ($cc eq '3') {	# top of odd-numbered page
+			$text = &new_page($pdf);
+			$text = &new_page($pdf)
+			    unless $pdf->page_count() & 1;
+			$advance = 1;
+		} elsif (defined $pre_skip{$cc}) {
+					# '3', '8' handled above
+			my $cur_y = defined($text) ? &cur_ypos($text) : 0;
+			my $new_y = &get_skip_ypos($cur_y, $pre_skip{$cc});
+			printf("%4d '%s' -> %d\n", $cur_y, $cc, $new_y)
+			    if $opt_d;
+			if ($new_y < $bottom_margin + $leading) {
+				$text = &new_page($pdf);
+			} else {
+				$text->position(0, $new_y - &cur_ypos($text));
+			}
+			$advance = 1;
+		} elsif (defined $post_skip{$cc}) {
+			# handled after printing
 		} else {		# unrecognized carriage control
 			my $pr = ord($cc);
 			$pr = ($pr < 32 || $pr > 126) ? sprintf("\\0%o", $pr)
@@ -633,6 +695,26 @@ sub process_file {
 		}
 		printf("%4d %s\n", &cur_ypos($text), $line) if $opt_d;
 		$text->text($line);
+
+		# post-print advancing
+		if ($cc eq 'H') {	# advance to first line on page
+			$text = &new_page($pdf);
+		} elsif ($cc eq 'C') {	# top of odd-numbered page
+			$text = &new_page($pdf);
+			$text = &new_page($pdf)
+			    unless $pdf->page_count() & 1;
+		} elsif (defined $post_skip{$cc}) {
+			my $cur_y = &cur_ypos($text);
+			my $new_y = &get_skip_ypos($cur_y+$leading,
+						   $post_skip{$cc});
+			printf("%4d '%s' -> %d\n", $cur_y, $cc, $new_y)
+			    if $opt_d;
+			if ($new_y < $last_line - $top_shift + $leading) {
+				$text = &new_page($pdf);
+			} else {
+				$text->position(0, $new_y - &cur_ypos($text));
+			}
+		}
 	}
 }
 
@@ -670,7 +752,8 @@ Width, height, left, right, rise default to inches; append "in", "cm", "mm",
 
 Processes standard ASA column 1 carriage controls ' ', '1', '0', '-', '+'.
 Also CDC extensions: '/' (no advance after), '2' (skip to last line),
-'Q' (auto-eject off; default), 'R' (auto-eject on), 'S' (6 lpi), 'T' (8 lpi).
+'Q' (auto-eject off; default), 'R' (auto-eject on), 'S' (6 lpi), 'T' (8 lpi),
+and forms control '3' - '8', 'C' - 'H' (see CDC NOS Ref. Man. vol. 1).
 
 =head1 AUTHOR
 
