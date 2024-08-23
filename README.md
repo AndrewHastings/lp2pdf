@@ -4,9 +4,6 @@ lp2pdf reads output files with old-style FORTRAN carriage control
 in column 1 (aka "ASA") and interprets those controls to produce
 PDF documents.
 
-See https://en.wikipedia.org/wiki/ASA_carriage_control_characters
-and Appendix I of http://bitsavers.org/pdf/cdc/cyber/nos/60435400M_NOS_Version_1_Reference_Manual_Volume_1_Dec80.pdf.
-
 ## Installation
 
 lp2pdf requires version 2.043 or newer of the Perl PDF::API2 module.
@@ -36,8 +33,17 @@ cpan -I PDF::API2
    acroread widefile.pdf
    ```
 
-See "Suggested fonts" below for the 'mnicmp' font, and the "LA120 Operator's
-Card" in https://bitsavers.org/pdf/dec/terminal/la120/EK-LA120-UG-003_LA120_Users_Guide_Jun79.pdf. The DECwriter III can print at 5, 6, 6.6, 8.25, 10, 12,
+4. Simulate printing on a Teletype 33 with yellow roll paper:
+   ```
+   (echo -e '\n\n\n' ; sed -e 's/^/ /' out.txt) > out.lp
+   lp2pdf -f ~/TTY37ts109-Book.ttf13 -m tty -sp tty -i 0.62 out.lp
+   acroread out.pdf
+   ```
+
+See "Suggested fonts" below for the 'mnicmp' and 'TTY37ts109-Book' fonts,
+and the "References" for some background info.
+
+The DECwriter III can print at 5, 6, 6.6, 8.25, 10, 12,
 13.2, or 16.5 CPI; and at 2, 3, 4, 6, 8, or 12 LPI.
 
 ## Suggested fonts
@@ -59,3 +65,13 @@ Teletype Retro (seems buggy)
 
 Chainprinter (no lowercase, not free)
 - https://typodermicfonts.com/chainprinter
+
+## References
+
+- ASA carriage control: https://en.wikipedia.org/wiki/ASA_carriage_control_characters
+
+- CDC carriage control extensions: http://bitsavers.org/pdf/cdc/cyber/nos/60435400M_NOS_Version_1_Reference_Manual_Volume_1_Dec80.pdf Appendix I
+
+- LA120 Operator's Card: https://bitsavers.org/pdf/dec/terminal/la120/EK-LA120-UG-003_LA120_Users_Guide_Jun79.pdf
+
+- Teletype 33: https://www.pdp8online.com/asr33/asr33.shtml

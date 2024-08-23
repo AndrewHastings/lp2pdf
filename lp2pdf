@@ -274,6 +274,8 @@ sub parse_pagesize {
 		"landscape" => "11in:8.5in",
 		"legal"     => "8.5in:14in",
 		"ledger"    => "17in:11in",
+		"tty"       => "8.44in:11in",	# add -s -i 0.62
+		# European sizes from "PDF::API2::Page":
 		"a0"	    => "2380bp:3368bp",
 		"a1"	    => "1684bp:2380bp",
 		"a2"	    => "1190bp:1684bp",
@@ -308,6 +310,7 @@ sub parse_media {
 		"greenbar"  => "bar:3/palegreen,line:3/limegreen",
 		"lined"     => "line:2/gray90:6/gray80,#:2/gray80",
 		"ss"        => "plain:lightgreen",
+		"tty"       => "plain:#ffed62",
 	);
 	$spec = $presets{lc $spec} if defined $presets{lc $spec};
 
